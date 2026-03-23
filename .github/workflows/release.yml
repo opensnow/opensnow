@@ -1,0 +1,178 @@
+name: Release
+
+# Triggered by a version tag push: git tag v0.2.0 && git push --tags
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Build and push container images to GitHub Container Registry (GHCR)
+  # Produces:
+  #   ghcr.io/opensnow/opensnow-server:<tag>
+  #   ghcr.io/opensnow/opensnow-worker:<tag>
+  # ---------------------------------------------------------------------------
+  build-and-push-images:
+    name: Build & push container images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version tag
+        id: version
+        run: echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # TODO: uncomment once Dockerfile.server produces a working binary
+      # - name: Build and push opensnow-server
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: .
+      #     file: Dockerfile.server
+      #     push: true
+      #     tags: |
+      #       ghcr.io/opensnow/opensnow-server:${{ steps.version.outputs.tag }}
+      #       ghcr.io/opensnow/opensnow-server:latest
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max
+
+      # TODO: uncomment once Dockerfile.worker produces a working binary
+      # - name: Build and push opensnow-worker
+      #   uses: docker/build-push-action@v5
+      #   with:
+      #     context: .
+      #     file: Dockerfile.worker
+      #     push: true
+      #     tags: |
+      #       ghcr.io/opensnow/opensnow-worker:${{ steps.version.outputs.tag }}
+      #       ghcr.io/opensnow/opensnow-worker:latest
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max
+
+      - name: Placeholder — images not yet built
+        run: echo "Image build skipped — binaries not yet implemented. Remove this step once Dockerfiles are enabled."
+
+  # ---------------------------------------------------------------------------
+  # Package and publish the Helm chart to GitHub Pages
+  # The chart is served at https://charts.opensnow.io (configured via
+  # GitHub Pages on the gh-pages branch).
+  # ---------------------------------------------------------------------------
+  publish-helm-chart:
+    name: Publish Helm chart
+    runs-on: ubuntu-latest
+    needs: build-and-push-images
+    permissions:
+      contents: write  # needed to push to gh-pages branch
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history needed for chart-releaser
+
+      - name: Extract version tag (strip leading 'v')
+        id: version
+        run: echo "chart_version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "latest"
+
+      # Sync appVersion in Chart.yaml with the git tag
+      - name: Update Chart.yaml version
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.chart_version }}/" deploy/helm/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${GITHUB_REF_NAME}\"/" deploy/helm/Chart.yaml
+
+      # TODO: uncomment once chart-releaser is configured with gh-pages branch
+      # - name: Run chart-releaser
+      #   uses: helm/chart-releaser-action@v1.6.0
+      #   with:
+      #     charts_dir: deploy
+      #   env:
+      #     CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Placeholder — Helm publish not yet configured
+        run: echo "Helm chart publish skipped — configure gh-pages branch and chart-releaser to enable."
+
+  # ---------------------------------------------------------------------------
+  # Build and upload CLI binaries for macOS, Linux, and Windows
+  # Attached as assets to the GitHub Release.
+  # ---------------------------------------------------------------------------
+  release-cli:
+    name: Release CLI binaries
+    runs-on: ubuntu-latest
+    needs: build-and-push-images
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          # TODO: add Windows target once cross-compilation is set up
+          # - x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # TODO: uncomment once opensnow-cli compiles
+      # - name: Build CLI binary
+      #   run: cargo build --release --bin opensnow --target ${{ matrix.target }}
+
+      # TODO: uncomment once binary exists
+      # - name: Upload binary to GitHub Release
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     files: target/${{ matrix.target }}/release/opensnow
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Placeholder — CLI build not yet implemented
+        run: echo "CLI binary build skipped — implement opensnow-cli then enable this step."
+
+  # ---------------------------------------------------------------------------
+  # Create the GitHub Release with release notes
+  # ---------------------------------------------------------------------------
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [publish-helm-chart, release-cli]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # TODO: uncomment once there is meaningful content to release
+      # - name: Create Release
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     generate_release_notes: true
+      #     draft: false
+      #     prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Placeholder — release creation not yet enabled
+        run: echo "GitHub Release creation skipped — enable once artifacts are being built."

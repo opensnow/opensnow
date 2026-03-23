@@ -1,0 +1,21 @@
+[package]
+name = "opensnow-storage"
+description = "Storage layer: Parquet file I/O over AWS S3 (and S3-compatible stores), Iceberg table format read/write."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+opensnow-common = { path = "../opensnow-common" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# TODO: add when implementation begins
+# object_store = { version = "...", features = ["aws"] }
+# parquet = "..."
+# arrow = "..."
+# iceberg = "..."

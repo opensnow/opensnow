@@ -1,0 +1,121 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel in-progress runs for the same PR/branch to save CI minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # Rust: test
+  # Runs on every change to Rust source or Cargo manifests.
+  # ---------------------------------------------------------------------------
+  rust-test:
+    name: Rust — test
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' ||
+      contains(github.event.pull_request.changed_files, 'crates/') ||
+      contains(github.event.pull_request.changed_files, 'Cargo.toml') ||
+      contains(github.event.pull_request.changed_files, 'Cargo.lock')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # TODO: uncomment once crates have real dependencies and compile
+      # - name: cargo test
+      #   run: cargo test --workspace --all-features
+
+      - name: cargo check (placeholder until implementations exist)
+        run: cargo check --workspace
+
+  # ---------------------------------------------------------------------------
+  # Rust: lint
+  # ---------------------------------------------------------------------------
+  rust-lint:
+    name: Rust — lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      # TODO: uncomment once crates have dependencies that compile
+      # - name: cargo clippy
+      #   run: cargo clippy --workspace --all-features -- -D warnings
+
+      # TODO: add cargo-deny for license and vulnerability checking
+      # - name: cargo deny check
+      #   run: cargo deny check
+
+  # ---------------------------------------------------------------------------
+  # Helm: lint
+  # Runs only when Helm chart files change.
+  # ---------------------------------------------------------------------------
+  helm-lint:
+    name: Helm — lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "latest"
+
+      - name: helm lint
+        run: helm lint deploy/helm/
+
+      # TODO: add helm template | kubectl --dry-run validation
+      # - name: helm template (dry-run)
+      #   run: helm template opensnow deploy/helm/ --debug
+
+  # ---------------------------------------------------------------------------
+  # Terraform: validate
+  # Runs only when Terraform files change.
+  # ---------------------------------------------------------------------------
+  terraform-validate:
+    name: Terraform — validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.6"
+
+      - name: terraform init
+        run: terraform init -backend=false
+        working-directory: deploy/terraform/aws
+
+      - name: terraform validate
+        run: terraform validate
+        working-directory: deploy/terraform/aws
+
+      # TODO: add tflint for additional lint rules
+      # - name: tflint
+      #   run: tflint --chdir=deploy/terraform/aws

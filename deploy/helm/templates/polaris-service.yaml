@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensnow.fullname" . }}-polaris
+  labels:
+    {{- include "opensnow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: polaris
+spec:
+  type: {{ .Values.polaris.service.type }}
+  selector:
+    {{- include "opensnow.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: polaris
+  ports:
+    - name: http
+      port: {{ .Values.polaris.service.port }}
+      targetPort: http
+      protocol: TCP

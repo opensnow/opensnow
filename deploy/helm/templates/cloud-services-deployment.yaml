@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensnow.fullname" . }}-cloud-services
+  labels:
+    {{- include "opensnow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cloud-services
+spec:
+  replicas: {{ .Values.cloudServices.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "opensnow.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cloud-services
+  template:
+    metadata:
+      labels:
+        {{- include "opensnow.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cloud-services
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "opensnow.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: cloud-services
+          image: {{ include "opensnow.serverImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.cloudServices.service.pgPort }}
+              protocol: TCP
+            - name: rest-api
+              containerPort: {{ .Values.cloudServices.service.restPort }}
+              protocol: TCP
+          env:
+            # Catalog (Apache Polaris)
+            - name: OPENSNOW_CATALOG_URL
+              value: "http://{{ include "opensnow.fullname" . }}-polaris:{{ .Values.polaris.service.port }}"
+            - name: OPENSNOW_CATALOG_CLIENT_ID
+              value: {{ .Values.polaris.adminClientId | quote }}
+            - name: OPENSNOW_CATALOG_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: polaris-admin-secret
+            # Storage (S3)
+            - name: OPENSNOW_S3_BUCKET
+              value: {{ .Values.storage.s3.bucket | quote }}
+            - name: OPENSNOW_S3_REGION
+              value: {{ .Values.storage.s3.region | quote }}
+            {{- if .Values.storage.s3.endpointOverride }}
+            - name: OPENSNOW_S3_ENDPOINT
+              value: {{ .Values.storage.s3.endpointOverride | quote }}
+            {{- end }}
+            {{- if .Values.storage.accessKeyId }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: s3-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: s3-secret-access-key
+            {{- end }}
+            # Database
+            - name: OPENSNOW_DB_URL
+              value: "postgres://{{ .Values.postgres.user }}:$(OPENSNOW_DB_PASSWORD)@{{ include "opensnow.postgresHost" . }}:5432/{{ .Values.postgres.database }}"
+            - name: OPENSNOW_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: postgres-password
+            # Auth
+            - name: OPENSNOW_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: admin-password
+            {{- with .Values.cloudServices.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.cloudServices.resources | nindent 12 }}
+          # TODO: add livenessProbe and readinessProbe once health endpoints are implemented
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

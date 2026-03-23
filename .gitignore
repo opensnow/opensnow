@@ -1,0 +1,36 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Terraform
+deploy/terraform/**/.terraform/
+deploy/terraform/**/.terraform.lock.hcl
+deploy/terraform/**/terraform.tfstate
+deploy/terraform/**/terraform.tfstate.backup
+deploy/terraform/**/terraform.tfvars
+!deploy/terraform/**/terraform.tfvars.example
+
+# Helm
+deploy/helm/charts/
+deploy/helm/*.tgz
+
+# Build artifacts
+dist/
+*.tar.gz
+
+# Test / benchmark output
+tests/tpch/results/

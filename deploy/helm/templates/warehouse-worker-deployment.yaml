@@ -1,0 +1,62 @@
+{{- /*
+  Phase 1: Worker logic runs in-process inside the Cloud Services node.
+  This Deployment is a placeholder for the Phase 2 compute split where each
+  virtual warehouse runs as its own isolated Deployment.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensnow.fullname" . }}-warehouse-worker
+  labels:
+    {{- include "opensnow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: warehouse-worker
+  annotations:
+    opensnow/phase: "2"
+    opensnow/note: "Default worker pool — individual warehouse Deployments are managed dynamically at runtime in Phase 2."
+spec:
+  replicas: {{ .Values.warehouseWorker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "opensnow.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: warehouse-worker
+  template:
+    metadata:
+      labels:
+        {{- include "opensnow.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: warehouse-worker
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "opensnow.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: warehouse-worker
+          image: {{ include "opensnow.workerImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.warehouseWorker.grpcPort }}
+              protocol: TCP
+          env:
+            - name: OPENSNOW_SERVER_GRPC
+              value: "{{ include "opensnow.fullname" . }}-cloud-services:9090"
+            - name: OPENSNOW_S3_BUCKET
+              value: {{ .Values.storage.s3.bucket | quote }}
+            - name: OPENSNOW_S3_REGION
+              value: {{ .Values.storage.s3.region | quote }}
+            {{- if .Values.storage.s3.endpointOverride }}
+            - name: OPENSNOW_S3_ENDPOINT
+              value: {{ .Values.storage.s3.endpointOverride | quote }}
+            {{- end }}
+            {{- with .Values.warehouseWorker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.warehouseWorker.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

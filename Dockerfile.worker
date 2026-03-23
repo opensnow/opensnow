@@ -1,0 +1,74 @@
+# =============================================================================
+# Dockerfile.worker — OpenSnow Warehouse Worker node
+#
+# Builds the `opensnow-worker` binary — the DataFusion-based compute process
+# that executes query fragments assigned to it by the Cloud Services node.
+# One or more worker pods form a single virtual warehouse.
+#
+# The final image is published as:
+#   ghcr.io/opensnow/opensnow-worker:<version>
+#
+# NOTE: The worker binary does not yet exist as a separate crate. In the
+# initial architecture the worker logic lives inside opensnow-compute and is
+# invoked by opensnow-server in-process. A dedicated worker binary will be
+# introduced in Phase 2 when the compute layer is split into a separate
+# Kubernetes Deployment for true compute isolation.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: builder
+# -----------------------------------------------------------------------------
+FROM rust:1.77-slim-bookworm AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates/opensnow-common/Cargo.toml  crates/opensnow-common/Cargo.toml
+COPY crates/opensnow-catalog/Cargo.toml crates/opensnow-catalog/Cargo.toml
+COPY crates/opensnow-storage/Cargo.toml crates/opensnow-storage/Cargo.toml
+COPY crates/opensnow-sql/Cargo.toml     crates/opensnow-sql/Cargo.toml
+COPY crates/opensnow-compute/Cargo.toml crates/opensnow-compute/Cargo.toml
+COPY crates/opensnow-auth/Cargo.toml    crates/opensnow-auth/Cargo.toml
+COPY crates/opensnow-server/Cargo.toml  crates/opensnow-server/Cargo.toml
+COPY crates/opensnow-cli/Cargo.toml     crates/opensnow-cli/Cargo.toml
+
+RUN find crates -name Cargo.toml | while read f; do \
+      dir=$(dirname "$f"); \
+      mkdir -p "$dir/src"; \
+      if grep -q '\[\[bin\]\]' "$f"; then \
+        echo 'fn main() {}' > "$dir/src/main.rs"; \
+      else \
+        touch "$dir/src/lib.rs"; \
+      fi; \
+    done
+
+COPY crates/ crates/
+
+# TODO: introduce a dedicated opensnow-worker binary crate in Phase 2, then:
+# RUN cargo build --release --bin opensnow-worker
+
+# -----------------------------------------------------------------------------
+# Stage 2: runtime
+# -----------------------------------------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --system --no-create-home --uid 1001 opensnow
+USER opensnow
+
+# TODO: uncomment once the worker binary exists
+# COPY --from=builder /build/target/release/opensnow-worker /usr/local/bin/opensnow-worker
+
+# Worker-to-server gRPC communication (internal cluster traffic only)
+EXPOSE 9090
+
+CMD ["echo", "opensnow-worker not yet implemented — see Phase 2 roadmap"]

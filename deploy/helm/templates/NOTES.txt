@@ -1,0 +1,30 @@
+OpenSnow has been deployed!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Connecting to OpenSnow
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PostgreSQL wire protocol (port {{ .Values.cloudServices.service.pgPort }}):
+
+  kubectl port-forward svc/{{ include "opensnow.fullname" . }}-cloud-services {{ .Values.cloudServices.service.pgPort }}:{{ .Values.cloudServices.service.pgPort }}
+
+  psql -h localhost -p {{ .Values.cloudServices.service.pgPort }} -U admin
+
+Snowflake REST API v2 (port {{ .Values.cloudServices.service.restPort }}):
+
+  kubectl port-forward svc/{{ include "opensnow.fullname" . }}-cloud-services {{ .Values.cloudServices.service.restPort }}:{{ .Values.cloudServices.service.restPort }}
+
+  # Then point your Snowflake connector at:
+  # account: localhost:{{ .Values.cloudServices.service.restPort }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  OpenSnow CLI
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  opensnow --account <hostname> --user admin
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Documentation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  https://github.com/opensnow/opensnow/docs

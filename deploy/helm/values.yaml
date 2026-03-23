@@ -1,0 +1,230 @@
+# =============================================================================
+# OpenSnow Helm Chart — Default Values
+#
+# All options are documented inline. Override any value by passing
+# `-f my-values.yaml` to `helm install` / `helm upgrade`.
+#
+# Required overrides before any non-local deployment:
+#   storage.s3.bucket
+#   storage.s3.region
+#   auth.adminPassword
+#   polaris.adminSecret
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Global image settings
+# -----------------------------------------------------------------------------
+image:
+  registry: ghcr.io
+  # Tag defaults to the chart's appVersion. Override to pin a specific release.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# -----------------------------------------------------------------------------
+# Cloud Services node (opensnow-server)
+#
+# The Cloud Services node is the entry point for all client connections.
+# It exposes the PostgreSQL wire protocol and the Snowflake REST API v2.
+# -----------------------------------------------------------------------------
+cloudServices:
+  image:
+    repository: opensnow/opensnow-server
+
+  replicaCount: 1
+
+  # Resource requests and limits — tune based on expected concurrency
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  service:
+    # PostgreSQL wire protocol
+    pgPort: 5432
+    # Snowflake REST API v2 (HTTP/HTTPS)
+    restPort: 8080
+    type: ClusterIP
+
+  # Ingress for the Snowflake REST API v2 endpoint.
+  # TLS is required for official Snowflake connectors in production.
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: opensnow.example.com
+    tls: []
+    # tls:
+    #   - secretName: opensnow-tls
+    #     hosts:
+    #       - opensnow.example.com
+
+  # Extra environment variables injected into the Cloud Services pod
+  extraEnv: []
+  # - name: OPENSNOW_LOG_LEVEL
+  #   value: "info"
+
+# -----------------------------------------------------------------------------
+# Warehouse Worker (opensnow-worker)
+#
+# Phase 1: workers run in-process inside the Cloud Services node.
+# Phase 2: workers become a separate Deployment (one per virtual warehouse).
+# This section configures the default worker pool for Phase 2.
+# -----------------------------------------------------------------------------
+warehouseWorker:
+  image:
+    repository: opensnow/opensnow-worker
+
+  # Default number of worker replicas (overridden per-warehouse at runtime)
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+
+  # Internal gRPC port for server-to-worker communication
+  grpcPort: 9090
+
+  extraEnv: []
+
+# -----------------------------------------------------------------------------
+# Apache Polaris — Iceberg REST catalog
+#
+# Polaris requires Java 21 and persists catalog metadata in PostgreSQL.
+# See ADR 0004 for the rationale for using Polaris.
+# -----------------------------------------------------------------------------
+polaris:
+  image:
+    repository: apache/polaris
+    tag: "latest"
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "2Gi"
+
+  service:
+    port: 8181
+    type: ClusterIP
+
+  # Bootstrap credentials for the root principal.
+  # CHANGE THESE before any non-local deployment.
+  adminClientId: "admin"
+  adminSecret: "change-me-before-deploying"
+
+  # JVM heap size (passed as -Xmx to the JVM)
+  jvmMaxHeap: "1g"
+
+  extraEnv: []
+
+# -----------------------------------------------------------------------------
+# PostgreSQL
+#
+# Used by both Polaris (catalog metadata) and the OpenSnow server
+# (session/account-level metadata). For production deployments, consider
+# using Amazon RDS instead and setting enabled: false here.
+# -----------------------------------------------------------------------------
+postgres:
+  # Set to false to use an external PostgreSQL instance (e.g. Amazon RDS)
+  enabled: true
+
+  image:
+    repository: postgres
+    tag: "16-alpine"
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "1Gi"
+
+  storage:
+    size: 20Gi
+    storageClassName: ""
+
+  database: opensnow
+  user: opensnow
+  # CHANGE THIS before any non-local deployment.
+  password: "change-me-before-deploying"
+
+  # Override with external DB coordinates when enabled: false
+  externalHost: ""
+  externalPort: 5432
+
+# -----------------------------------------------------------------------------
+# Object storage (AWS S3)
+#
+# All data files (Parquet micro-partitions) are stored in S3.
+# For local development, this is pointed at the MinIO service instead.
+# -----------------------------------------------------------------------------
+storage:
+  s3:
+    # REQUIRED: name of the S3 bucket created by the Terraform module
+    bucket: ""
+    # REQUIRED: AWS region where the bucket lives
+    region: "us-east-1"
+    # Override the S3 endpoint URL (used for MinIO in local dev)
+    endpointOverride: ""
+
+  # IAM role ARN for IRSA (IAM Roles for Service Accounts).
+  # When set, the server pod uses this role to access S3 without static keys.
+  # Recommended for production. Leave empty to use static credentials below.
+  iamRoleArn: ""
+
+  # Static credentials — only for local dev / non-IRSA deployments.
+  # NEVER commit real credentials here; use a Kubernetes Secret instead.
+  accessKeyId: ""
+  secretAccessKey: ""
+
+# -----------------------------------------------------------------------------
+# Authentication
+# -----------------------------------------------------------------------------
+auth:
+  # Password for the built-in `admin` user.
+  # CHANGE THIS before any non-local deployment.
+  adminPassword: "change-me-before-deploying"
+
+  # JWT signing key for the Snowflake REST API v2.
+  # Leave empty to auto-generate on first start (stored in a Kubernetes Secret).
+  jwtSigningKey: ""
+
+  # Session idle timeout in seconds (0 = no timeout)
+  sessionTimeoutSeconds: 3600
+
+# -----------------------------------------------------------------------------
+# Service account
+# -----------------------------------------------------------------------------
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  # For IRSA, add the role annotation here:
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/opensnow-s3
+
+# -----------------------------------------------------------------------------
+# Pod configuration
+# -----------------------------------------------------------------------------
+podAnnotations: {}
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

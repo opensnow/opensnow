@@ -1,0 +1,21 @@
+[package]
+name = "opensnow-auth"
+description = "Authentication and authorization: JWT session tokens, RBAC roles and grants, Snowflake-compatible privilege model."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+opensnow-common = { path = "../opensnow-common" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+# TODO: add when implementation begins
+# jsonwebtoken = "..."
+# bcrypt = "..."
+# uuid = { version = "...", features = ["v4"] }

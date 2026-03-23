@@ -1,0 +1,224 @@
+# =============================================================================
+# docker-compose.yml — OpenSnow local development stack
+#
+# Starts the full OpenSnow system locally using MinIO in place of AWS S3.
+# No cloud account required.
+#
+# Usage:
+#   docker compose up           # start everything
+#   docker compose up -d        # start in background
+#   docker compose down -v      # stop and remove volumes
+#
+# Once running, connect with:
+#   opensnow --account localhost --user admin --password password
+#   psql -h localhost -p 5432 -U admin
+#   curl http://localhost:8080/api/v2/statements  (Snowflake REST API v2)
+#
+# MinIO console: http://localhost:9001  (user: minioadmin / minioadmin)
+# Polaris console: http://localhost:8181
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MinIO — S3-compatible object storage for local development
+  # Replaces AWS S3. Data is persisted in the `minio-data` Docker volume.
+  # ---------------------------------------------------------------------------
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: opensnow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO web console
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opensnow
+
+  # ---------------------------------------------------------------------------
+  # minio-init — one-shot container that creates the default S3 bucket
+  # Runs after minio is healthy and then exits.
+  # ---------------------------------------------------------------------------
+  minio-init:
+    image: quay.io/minio/mc:latest
+    container_name: opensnow-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 minioadmin minioadmin &&
+        mc mb --ignore-existing local/opensnow-data &&
+        echo 'Bucket opensnow-data ready.'
+      "
+    networks:
+      - opensnow
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — backing store for Apache Polaris catalog metadata
+  # Also used by opensnow-server for session/account-level metadata.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: opensnow-postgres
+    environment:
+      POSTGRES_USER: opensnow
+      POSTGRES_PASSWORD: opensnow
+      POSTGRES_DB: opensnow
+    ports:
+      - "5433:5432"   # exposed on 5433 to avoid conflict with opensnow-server on 5432
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensnow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - opensnow
+
+  # ---------------------------------------------------------------------------
+  # Apache Polaris — Iceberg REST catalog
+  #
+  # Polaris is a JVM service (Java 21). It exposes the Iceberg REST API at
+  # port 8181 and persists catalog metadata in PostgreSQL.
+  #
+  # Official image: apache/polaris (incubating)
+  # Docs: https://polaris.apache.org
+  #
+  # NOTE: The `apache/polaris` image is still being stabilised upstream. If
+  # the tag below is unavailable, check https://hub.docker.com/r/apache/polaris
+  # for the latest available tag and update accordingly.
+  # ---------------------------------------------------------------------------
+  polaris:
+    image: apache/polaris:latest
+    container_name: opensnow-polaris
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Polaris persistence backend — switch from in-memory (default) to
+      # PostgreSQL so catalog state survives container restarts.
+      POLARIS_PERSISTENCE_TYPE: relational-jdbc
+      POLARIS_PERSISTENCE_JDBC_URL: jdbc:postgresql://postgres:5432/opensnow
+      POLARIS_PERSISTENCE_JDBC_USER: opensnow
+      POLARIS_PERSISTENCE_JDBC_PASSWORD: opensnow
+
+      # Bootstrap credentials for the root principal (admin user).
+      # Change these before any non-local deployment.
+      POLARIS_BOOTSTRAP_ROOT_CLIENT_ID: admin
+      POLARIS_BOOTSTRAP_ROOT_CLIENT_SECRET: admin-secret
+
+      # S3-compatible storage (MinIO) for credential vending
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      # Override the S3 endpoint so Polaris talks to MinIO, not real AWS
+      # TODO: confirm the correct Polaris env var name for endpoint override
+      # POLARIS_S3_ENDPOINT: http://minio:9000
+    ports:
+      - "8181:8181"   # Iceberg REST API
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8181/healthcheck"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s   # JVM startup takes a few seconds
+    networks:
+      - opensnow
+
+  # ---------------------------------------------------------------------------
+  # opensnow-server — Cloud Services node
+  #
+  # Exposes:
+  #   - Port 5432: PostgreSQL wire protocol (psql, SQLAlchemy, BI tools)
+  #   - Port 8080: Snowflake REST API v2 (official Snowflake connectors)
+  #
+  # TODO: replace `image` with a build directive once the binary is implemented:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.server
+  # ---------------------------------------------------------------------------
+  opensnow-server:
+    image: alpine:latest   # placeholder — replace with opensnow-server image
+    container_name: opensnow-server
+    depends_on:
+      polaris:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      # Catalog (Polaris)
+      OPENSNOW_CATALOG_URL: http://polaris:8181
+      OPENSNOW_CATALOG_CLIENT_ID: admin
+      OPENSNOW_CATALOG_CLIENT_SECRET: admin-secret
+
+      # Storage (MinIO / S3)
+      OPENSNOW_S3_ENDPOINT: http://minio:9000
+      OPENSNOW_S3_BUCKET: opensnow-data
+      OPENSNOW_S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+
+      # Postgres (for session/account metadata)
+      OPENSNOW_DB_URL: postgres://opensnow:opensnow@postgres:5432/opensnow
+
+      # Auth
+      OPENSNOW_ADMIN_USER: admin
+      OPENSNOW_ADMIN_PASSWORD: password   # change before non-local deployment
+    ports:
+      - "5432:5432"   # PostgreSQL wire protocol
+      - "8080:8080"   # Snowflake REST API v2
+    # TODO: replace command with the real binary entrypoint
+    command: ["sh", "-c", "echo 'opensnow-server placeholder — not yet implemented' && sleep infinity"]
+    networks:
+      - opensnow
+
+  # ---------------------------------------------------------------------------
+  # opensnow-worker — Warehouse Worker node (Phase 2)
+  #
+  # In Phase 1 the compute layer runs in-process inside opensnow-server.
+  # This service is a placeholder for the Phase 2 split where each virtual
+  # warehouse runs as a separate Deployment of worker pods.
+  # ---------------------------------------------------------------------------
+  opensnow-worker:
+    image: alpine:latest   # placeholder — replace with opensnow-worker image
+    container_name: opensnow-worker
+    depends_on:
+      - opensnow-server
+    environment:
+      OPENSNOW_SERVER_GRPC: opensnow-server:9090
+      OPENSNOW_S3_ENDPOINT: http://minio:9000
+      OPENSNOW_S3_BUCKET: opensnow-data
+      OPENSNOW_S3_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    # TODO: replace command with real worker binary once Phase 2 is implemented
+    command: ["sh", "-c", "echo 'opensnow-worker placeholder — Phase 2' && sleep infinity"]
+    networks:
+      - opensnow
+
+# =============================================================================
+# Named volumes — data persists across `docker compose down` (without -v)
+# =============================================================================
+volumes:
+  minio-data:
+  postgres-data:
+
+# =============================================================================
+# Network — all services communicate on an isolated bridge network
+# =============================================================================
+networks:
+  opensnow:
+    driver: bridge

@@ -1,0 +1,32 @@
+apiVersion: v2
+name: opensnow
+description: >
+  OpenSnow — self-hosted, open-source data warehouse compatible with the
+  Snowflake SQL dialect and official Snowflake drivers. Deploy on your own
+  AWS infrastructure and run the same SnowSQL queries you write today.
+type: application
+
+# chart version — bump on any change to Helm templates or values
+version: 0.1.0
+
+# appVersion — must match the container image tag built by CI
+appVersion: "0.1.0"
+
+keywords:
+  - data-warehouse
+  - snowflake
+  - analytics
+  - sql
+  - iceberg
+  - datafusion
+
+home: https://github.com/opensnow/opensnow
+sources:
+  - https://github.com/opensnow/opensnow
+maintainers:
+  - name: OpenSnow Contributors
+    url: https://github.com/opensnow/opensnow
+
+dependencies: []
+# Future: consider a sub-chart dependency for PostgreSQL (e.g. bitnami/postgresql)
+# and Apache Polaris once an official chart is available.

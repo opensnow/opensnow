@@ -1,0 +1,84 @@
+# =============================================================================
+# Dockerfile.server — OpenSnow Cloud Services node
+#
+# Builds the `opensnow-server` binary (PostgreSQL wire protocol + Snowflake
+# REST API v2 HTTP server) using a multi-stage build:
+#
+#   Stage 1 (builder): compile with the official Rust image
+#   Stage 2 (runtime): copy only the binary into a minimal Debian slim image
+#
+# The final image is published as:
+#   ghcr.io/opensnow/opensnow-server:<version>
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: builder
+# -----------------------------------------------------------------------------
+FROM rust:1.77-slim-bookworm AS builder
+
+WORKDIR /build
+
+# Install system dependencies needed for linking (OpenSSL, pkg-config)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace manifests first so dependency layers cache independently
+# from source changes.
+COPY Cargo.toml Cargo.lock ./
+COPY crates/opensnow-common/Cargo.toml  crates/opensnow-common/Cargo.toml
+COPY crates/opensnow-catalog/Cargo.toml crates/opensnow-catalog/Cargo.toml
+COPY crates/opensnow-storage/Cargo.toml crates/opensnow-storage/Cargo.toml
+COPY crates/opensnow-sql/Cargo.toml     crates/opensnow-sql/Cargo.toml
+COPY crates/opensnow-compute/Cargo.toml crates/opensnow-compute/Cargo.toml
+COPY crates/opensnow-auth/Cargo.toml    crates/opensnow-auth/Cargo.toml
+COPY crates/opensnow-server/Cargo.toml  crates/opensnow-server/Cargo.toml
+COPY crates/opensnow-cli/Cargo.toml     crates/opensnow-cli/Cargo.toml
+
+# Create stub lib/main files so `cargo build` can resolve the workspace and
+# cache dependencies without the full source.
+RUN find crates -name Cargo.toml | while read f; do \
+      dir=$(dirname "$f"); \
+      mkdir -p "$dir/src"; \
+      if grep -q '\[\[bin\]\]' "$f"; then \
+        echo 'fn main() {}' > "$dir/src/main.rs"; \
+      else \
+        touch "$dir/src/lib.rs"; \
+      fi; \
+    done
+
+# TODO: uncomment once dependencies are pinned in Cargo.toml
+# RUN cargo build --release --bin opensnow-server
+
+# Copy real source and build the final binary
+COPY crates/ crates/
+
+# TODO: uncomment once dependencies are pinned in Cargo.toml
+# RUN touch crates/opensnow-server/src/main.rs && \
+#     cargo build --release --bin opensnow-server
+
+# -----------------------------------------------------------------------------
+# Stage 2: runtime
+# -----------------------------------------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as a non-root user
+RUN useradd --system --no-create-home --uid 1001 opensnow
+USER opensnow
+
+# TODO: uncomment once build stage produces the binary
+# COPY --from=builder /build/target/release/opensnow-server /usr/local/bin/opensnow-server
+
+# PostgreSQL wire protocol
+EXPOSE 5432
+# Snowflake REST API v2 (HTTP)
+EXPOSE 8080
+
+# TODO: replace placeholder with real binary once implemented
+CMD ["echo", "opensnow-server not yet implemented — rebuild after Stage 1 is enabled"]

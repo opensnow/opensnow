@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "crates/opensnow-common",
+    "crates/opensnow-catalog",
+    "crates/opensnow-storage",
+    "crates/opensnow-sql",
+    "crates/opensnow-compute",
+    "crates/opensnow-auth",
+    "crates/opensnow-server",
+    "crates/opensnow-cli",
+]
+
+# Workspace-level dependency versions — pin once, share across all crates.
+# Individual crates reference these via `dependency = { workspace = true }`.
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+thiserror = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/opensnow/opensnow"
+authors = ["OpenSnow Contributors"]

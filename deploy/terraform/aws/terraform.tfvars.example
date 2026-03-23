@@ -1,0 +1,25 @@
+# =============================================================================
+# terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is git-ignored — never commit real credentials.
+# =============================================================================
+
+aws_region   = "us-east-1"
+environment  = "production"
+cluster_name = "opensnow"
+
+# S3 bucket name — must be globally unique across all AWS accounts
+s3_bucket_name = "my-org-opensnow-data"
+
+# EKS node sizing — adjust based on expected workload
+system_node_instance_type  = "m6i.xlarge"
+system_node_desired_count  = 2
+worker_node_instance_type  = "r6i.2xlarge"
+worker_node_desired_count  = 2
+worker_node_max_count      = 10
+
+# Sensitive values — consider using Terraform Cloud / AWS Secrets Manager
+# instead of storing these in a tfvars file.
+opensnow_admin_password = "replace-with-strong-password"
+polaris_admin_secret    = "replace-with-strong-secret"

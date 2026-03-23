@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opensnow.fullname" . }}-polaris
+  labels:
+    {{- include "opensnow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: polaris
+spec:
+  # Polaris should run as a single replica with a StatefulSet in production
+  # for stable identity. A Deployment is used here for simplicity in v1.
+  replicas: {{ .Values.polaris.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "opensnow.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: polaris
+  template:
+    metadata:
+      labels:
+        {{- include "opensnow.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: polaris
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: polaris
+          image: "{{ .Values.polaris.image.repository }}:{{ .Values.polaris.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.polaris.service.port }}
+              protocol: TCP
+          env:
+            - name: JAVA_OPTS
+              value: "-Xmx{{ .Values.polaris.jvmMaxHeap }}"
+            # Persistence — PostgreSQL backend
+            - name: POLARIS_PERSISTENCE_TYPE
+              value: "relational-jdbc"
+            - name: POLARIS_PERSISTENCE_JDBC_URL
+              value: "jdbc:postgresql://{{ include "opensnow.postgresHost" . }}:5432/{{ .Values.postgres.database }}"
+            - name: POLARIS_PERSISTENCE_JDBC_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POLARIS_PERSISTENCE_JDBC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: postgres-password
+            # Bootstrap admin credentials
+            - name: POLARIS_BOOTSTRAP_ROOT_CLIENT_ID
+              value: {{ .Values.polaris.adminClientId | quote }}
+            - name: POLARIS_BOOTSTRAP_ROOT_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "opensnow.fullname" . }}-secrets
+                  key: polaris-admin-secret
+            {{- with .Values.polaris.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.polaris.resources | nindent 12 }}
+          # TODO: add livenessProbe once Polaris exposes a stable health endpoint
+          # livenessProbe:
+          #   httpGet:
+          #     path: /healthcheck
+          #     port: http
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 15
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

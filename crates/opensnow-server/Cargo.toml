@@ -1,0 +1,31 @@
+[package]
+name = "opensnow-server"
+description = "Cloud Services node: PostgreSQL wire protocol server, Snowflake REST API v2 endpoint, query dispatch, session management."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "opensnow-server"
+path = "src/main.rs"
+
+[dependencies]
+opensnow-common  = { path = "../opensnow-common" }
+opensnow-catalog = { path = "../opensnow-catalog" }
+opensnow-compute = { path = "../opensnow-compute" }
+opensnow-sql     = { path = "../opensnow-sql" }
+opensnow-auth    = { path = "../opensnow-auth" }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+# TODO: add when implementation begins
+# pgwire = "..."          ← PostgreSQL wire protocol
+# axum = "..."            ← HTTP server for Snowflake REST API v2
+# tower = "..."
+# hyper = "..."

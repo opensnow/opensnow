@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opensnow.fullname" . }}-cloud-services
+  labels:
+    {{- include "opensnow.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cloud-services
+spec:
+  type: {{ .Values.cloudServices.service.type }}
+  selector:
+    {{- include "opensnow.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: cloud-services
+  ports:
+    - name: postgres
+      port: {{ .Values.cloudServices.service.pgPort }}
+      targetPort: postgres
+      protocol: TCP
+    - name: rest-api
+      port: {{ .Values.cloudServices.service.restPort }}
+      targetPort: rest-api
+      protocol: TCP
