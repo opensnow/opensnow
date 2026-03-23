@@ -1,0 +1,278 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="OpenSnow — Open-source Snowflake-compatible Data Warehouse">
+  <header>
+    <nav>
+      <div class="logo">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M16 2L28 9v14l-12 7L4 23V9l12-7z" fill="#3b82f6"/>
+          <path d="M16 8l8 4.5v9L16 26l-8-4.5v-9L16 8z" fill="#60a5fa"/>
+        </svg>
+        <span>OpenSnow</span>
+      </div>
+      <div class="links">
+        <a href="#quickstart">Quick Start</a>
+        <a href="#deployment">Deployment</a>
+        <a href="#architecture">Architecture</a>
+        <a href="https://github.com/opensnow/opensnow" target="_blank">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Open-source, self-hosted<br/>Snowflake-compatible data warehouse</h1>
+      <p class="subtitle">
+        Deploy on your own AWS infrastructure and run the same SnowSQL queries
+        you write today — no retraining, no migration tax.
+      </p>
+      <div class="badges">
+        <span class="badge">Apache 2.0</span>
+        <span class="badge">Rust</span>
+        <span class="badge">Pre-alpha</span>
+      </div>
+    </section>
+
+    <section id="quickstart" class="section">
+      <h2>Quick Start</h2>
+      <p>Requires Docker and Docker Compose.</p>
+      <pre><code>git clone https://github.com/opensnow/opensnow
+cd opensnow
+docker compose up</code></pre>
+      <p>
+        Starts MinIO, Apache Polaris, PostgreSQL, and opensnow-server.
+        Connect with any PostgreSQL client or the Snowflake REST API.
+      </p>
+    </section>
+
+    <section id="deployment" class="section">
+      <h2>Production Deployment</h2>
+      <h3>1. Provision AWS infrastructure</h3>
+      <pre><code>cd deploy/terraform/aws
+cp terraform.tfvars.example terraform.tfvars
+terraform init && terraform apply</code></pre>
+
+      <h3>2. Deploy via Helm</h3>
+      <pre><code>helm repo add opensnow https://charts.opensnow.io
+helm repo update
+helm install opensnow opensnow/opensnow \
+  --namespace opensnow --create-namespace \
+  -f my-values.yaml</code></pre>
+    </section>
+
+    <section id="architecture" class="section">
+      <h2>Architecture</h2>
+      <div class="arch-layers">
+        <div class="layer">
+          <h4>Cloud Services</h4>
+          <p>Authentication, query planning, result caching, catalog integration</p>
+        </div>
+        <div class="layer">
+          <h4>Compute</h4>
+          <p>Independent virtual warehouses backed by Apache DataFusion</p>
+        </div>
+        <div class="layer">
+          <h4>Storage</h4>
+          <p>Apache Parquet on S3, managed by Apache Iceberg with ACID transactions</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Roadmap</h2>
+      <div class="roadmap">
+        <div class="phase">
+          <h4>Phase 1 — Foundation</h4>
+          <p>Single-node deployment, basic analytical SQL, PostgreSQL wire protocol, S3 + Iceberg storage</p>
+        </div>
+        <div class="phase">
+          <h4>Phase 2 — Virtual Warehouses</h4>
+          <p>Multiple isolated warehouses, VARIANT type, Snowflake REST API v2, RBAC</p>
+        </div>
+        <div class="phase">
+          <h4>Phase 3 — Time Travel</h4>
+          <p>Time travel queries, UNDROP, zero-copy cloning, CDC + scheduled SQL</p>
+        </div>
+        <div class="phase">
+          <h4>Phase 4 — Multi-Cloud</h4>
+          <p>GCP and Azure storage, query optimization, Snowflake schema migration tool</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2024 OpenSnow Contributors. Apache License 2.0</p>
+  </footer>
+</Layout>
+
+<style>
+  header {
+    background: white;
+    border-bottom: 1px solid #e2e8f0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  nav {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 700;
+    font-size: 1.25rem;
+  }
+
+  .links {
+    display: flex;
+    gap: 2rem;
+  }
+
+  .links a {
+    color: var(--slate);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .links a:hover {
+    color: var(--blue);
+  }
+
+  main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .hero {
+    text-align: center;
+    padding: 4rem 0 3rem;
+  }
+
+  h1 {
+    font-size: 2.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 1.5rem;
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--slate);
+    max-width: 600px;
+    margin: 0 auto 1.5rem;
+  }
+
+  .badges {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+  }
+
+  .badge {
+    background: #e2e8f0;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .section {
+    margin: 3rem 0;
+  }
+
+  .section h2 {
+    font-size: 1.75rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--blue);
+  }
+
+  .section h3 {
+    font-size: 1.25rem;
+    margin: 1.5rem 0 1rem;
+    color: var(--slate);
+  }
+
+  .section p {
+    margin: 1rem 0;
+    color: #475569;
+  }
+
+  .section pre {
+    margin: 1rem 0;
+  }
+
+  .arch-layers {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .layer {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .layer h4 {
+    color: var(--blue);
+    margin-bottom: 0.5rem;
+  }
+
+  .roadmap {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .phase {
+    background: white;
+    padding: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .phase h4 {
+    color: var(--blue);
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .phase p {
+    font-size: 0.9rem;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--slate);
+    border-top: 1px solid #e2e8f0;
+    margin-top: 4rem;
+  }
+
+  @media (max-width: 640px) {
+    .links {
+      gap: 1rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+    }
+
+    .roadmap {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

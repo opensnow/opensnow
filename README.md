@@ -93,6 +93,31 @@ options.
 
 ---
 
+## Documentation Site
+
+The documentation site is built with [Astro](https://astro.build) and deployed to
+[Netlify](https://netlify.com).
+
+**Local development:**
+
+```bash
+cd site
+npm install
+npm run dev
+```
+
+**Deployment:**
+
+The site is automatically deployed on release tags via GitHub Actions. You'll need
+to configure the following secrets in your repository:
+
+- `NETLIFY_AUTH_TOKEN` - A Netlify personal access token
+- `NETLIFY_SITE_ID` - The ID of your Netlify site
+
+The Helm chart is packaged and served at `/charts/` on the deployed site.
+
+---
+
 ## Migrating from Snowflake
 
 The goal is zero-friction migration. Teams should be able to:
@@ -185,6 +210,7 @@ opensnow/
 ├── docs/
 │   ├── architecture/        # Architecture overview
 │   └── adr/                 # Architecture Decision Records
+├── site/                    # Documentation site (Astro)
 ├── tests/
 │   ├── integration/         # End-to-end SQL correctness tests
 │   └── tpch/                # TPC-H performance benchmark suite
