@@ -14,8 +14,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-
-# TODO: add when implementation begins
-# jsonwebtoken = "..."
-# bcrypt = "..."
-# uuid = { version = "...", features = ["v4"] }
+bcrypt = { workspace = true }
+jsonwebtoken = "9"
+uuid = { version = "1", features = ["v4"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

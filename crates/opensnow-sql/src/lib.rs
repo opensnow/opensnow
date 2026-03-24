@@ -41,4 +41,84 @@
 //! - `functions` — UDF/UDAF registrations
 //! - `types`     — VARIANT type definition and Arrow mapping
 
-// TODO: implement
+use opensnow_common::{OpenSnowError, Result};
+
+/// Constrained statement shape for the first storage vertical slice.
+///
+/// Supported SQL:
+/// `SELECT * FROM parquet_scan('<path>') LIMIT <n>`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelectParquetScan {
+    pub path: String,
+    pub limit: usize,
+}
+
+/// Parse a minimal `SELECT ... parquet_scan(...) LIMIT ...` statement.
+pub fn parse_select_parquet_scan(sql: &str) -> Result<SelectParquetScan> {
+    let sql = sql.trim().trim_end_matches(';').trim();
+    let sql_lower = sql.to_ascii_lowercase();
+    let prefix = "select * from ";
+    if !sql_lower.starts_with(prefix) {
+        return Err(OpenSnowError::InvalidStatement(
+            "only `SELECT * FROM parquet_scan('<path>') LIMIT <n>` is supported in this slice"
+                .to_string(),
+        ));
+    }
+
+    let scan_start = sql_lower.find("parquet_scan(").ok_or_else(|| {
+        OpenSnowError::InvalidStatement("missing `parquet_scan(...)` call".to_string())
+    })?;
+    let arg_start = scan_start + "parquet_scan(".len();
+    let arg_end = sql[arg_start..]
+        .find(')')
+        .map(|idx| arg_start + idx)
+        .ok_or_else(|| OpenSnowError::InvalidStatement("missing `)` after parquet_scan".to_string()))?;
+
+    let raw_arg = sql[arg_start..arg_end].trim();
+    if !(raw_arg.starts_with('\'') && raw_arg.ends_with('\'')) || raw_arg.len() < 2 {
+        return Err(OpenSnowError::InvalidStatement(
+            "parquet_scan argument must be single-quoted path".to_string(),
+        ));
+    }
+    let path = raw_arg[1..raw_arg.len() - 1].to_string();
+    if path.is_empty() {
+        return Err(OpenSnowError::InvalidStatement(
+            "parquet_scan path must not be empty".to_string(),
+        ));
+    }
+
+    let trailing = sql[arg_end + 1..].trim();
+    let trailing_lower = trailing.to_ascii_lowercase();
+    let limit_prefix = "limit ";
+    if !trailing_lower.starts_with(limit_prefix) {
+        return Err(OpenSnowError::InvalidStatement(
+            "statement must end with `LIMIT <n>`".to_string(),
+        ));
+    }
+    let limit = trailing[limit_prefix.len()..]
+        .trim()
+        .parse::<usize>()
+        .map_err(|_| OpenSnowError::InvalidStatement("limit must be a positive integer".to_string()))?;
+
+    Ok(SelectParquetScan { path, limit })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_shape() {
+        let parsed =
+            parse_select_parquet_scan("SELECT * FROM parquet_scan('/tmp/a.parquet') LIMIT 10")
+                .unwrap();
+        assert_eq!(parsed.path, "/tmp/a.parquet");
+        assert_eq!(parsed.limit, 10);
+    }
+
+    #[test]
+    fn rejects_invalid_shape() {
+        let err = parse_select_parquet_scan("SELECT 1").unwrap_err();
+        assert!(matches!(err, OpenSnowError::InvalidStatement(_)));
+    }
+}

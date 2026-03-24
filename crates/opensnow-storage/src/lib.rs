@@ -36,4 +36,42 @@
 //! - `iceberg`   — Iceberg table format: snapshots, manifests, metadata
 //! - `stats`     — Column-level statistics extraction for pruning
 
-// TODO: implement
+use opensnow_common::{OpenSnowError, Result};
+use parquet::{
+    file::reader::{FileReader, SerializedFileReader},
+    record::Field,
+};
+use serde_json::{Map, Value};
+use std::{fs::File, path::Path};
+
+/// Read rows from a local parquet file and return them as JSON objects.
+pub fn read_local_parquet_rows(path: impl AsRef<Path>, limit: usize) -> Result<Vec<Value>> {
+    let file = File::open(path.as_ref())?;
+    let reader = SerializedFileReader::new(file).map_err(|e| OpenSnowError::Storage(e.to_string()))?;
+    let mut iter = reader
+        .get_row_iter(None)
+        .map_err(|e| OpenSnowError::Storage(e.to_string()))?;
+
+    let mut rows = Vec::new();
+    for _ in 0..limit {
+        let Some(row) = iter.next() else {
+            break;
+        };
+        let row = row.map_err(|e| OpenSnowError::Storage(e.to_string()))?;
+        let mut obj = Map::new();
+        for (name, field) in row.get_column_iter() {
+            obj.insert(name.to_string(), parquet_field_to_json(field));
+        }
+        rows.push(Value::Object(obj));
+    }
+
+    Ok(rows)
+}
+
+fn parquet_field_to_json(field: &Field) -> Value {
+    if matches!(field, Field::Null) {
+        Value::Null
+    } else {
+        Value::from(field.to_string())
+    }
+}

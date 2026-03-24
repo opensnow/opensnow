@@ -64,6 +64,98 @@ psql -h localhost -p 5432 -U admin
 
 Or point your existing Snowflake connector at `localhost:8080`.
 
+### Minimal REST API v2 local test (current implementation)
+
+The pre-alpha implementation currently supports a constrained query shape:
+
+`SELECT * FROM parquet_scan('<absolute_path>') LIMIT <n>`
+
+1) Install `pyarrow` and generate a sample parquet fixture:
+
+```bash
+python3 -m pip install --user pyarrow
+python3 scripts/make_sample_parquet.py
+```
+
+2) Start the server:
+
+```bash
+cargo run -p opensnow-server
+```
+
+3) Submit and poll a statement:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v2/statements \
+  -u admin:password \
+  -H "content-type: application/json" \
+  -d '{"statement":"SELECT * FROM parquet_scan('\''/Users/danielbanks/dev/opensnow/tests/fixtures/sample.parquet'\'') LIMIT 5"}' | jq
+
+curl -s -u admin:password http://localhost:8080/api/v2/statements/stmt_mock_0001 | jq
+```
+
+You can also create a session token and use bearer auth:
+
+```bash
+curl -s -X POST http://localhost:8080/api/v2/session \
+  -H "content-type: application/json" \
+  -d '{"username":"admin","password":"password","role":"ACCOUNTADMIN"}' | jq
+
+TOKEN="$(curl -s -X POST http://localhost:8080/api/v2/session \
+  -H "content-type: application/json" \
+  -d '{"username":"admin","password":"password"}' | jq -r '.sessionToken')"
+
+curl -s -X POST http://localhost:8080/api/v2/statements \
+  -H "authorization: Bearer $TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"statement":"SELECT * FROM parquet_scan('\''/Users/danielbanks/dev/opensnow/tests/fixtures/sample.parquet'\'') LIMIT 5"}' | jq
+```
+
+Revoke a session token:
+
+```bash
+curl -s -X DELETE "http://localhost:8080/api/v2/session/$TOKEN" | jq
+```
+
+Bootstrap credentials are configurable with:
+- `OPENSNOW_BOOTSTRAP_USER` (default `admin`)
+- `OPENSNOW_BOOTSTRAP_PASSWORD` (default `password`)
+
+Session tokens default to a 1-hour TTL. You can override at login with
+`sessionTtlSeconds` for testing.
+
+JWT signing secret is configurable with:
+- `OPENSNOW_SESSION_SECRET` (default `dev-secret-change-me`, rotate for non-local use)
+- `OPENSNOW_PREVIOUS_SESSION_SECRET` (optional; allows old tokens during key rotation)
+
+Auth mode is configurable with:
+- `OPENSNOW_AUTH_MODE=local|oidc` (default `local`)
+- `OPENSNOW_OIDC_JWKS_URL` (required in `oidc` mode)
+- `OPENSNOW_OIDC_ISSUER` (optional)
+- `OPENSNOW_OIDC_AUDIENCE` (optional)
+- `OPENSNOW_OIDC_JWKS_CACHE_TTL_SECONDS` (optional, default `300`)
+
+In `oidc` mode, `/api/v2/session` and `/api/v2/session/{token}` are disabled; use
+OIDC-issued bearer tokens directly.
+
+Example successful poll response:
+
+```json
+{
+  "statementHandle": "stmt_mock_0001",
+  "status": "succeeded",
+  "sqlState": "00000",
+  "errorCode": null,
+  "message": "Statement completed successfully",
+  "data": [
+    { "id": "1", "name": "alice", "score": "98.5" }
+  ],
+  "rowCount": 3,
+  "createdAtEpochMs": 1711380000000,
+  "updatedAtEpochMs": 1711380000012
+}
+```
+
 ---
 
 ## Production deployment (AWS)

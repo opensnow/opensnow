@@ -1,6 +1,5 @@
 name: Release
 
-# Triggered by a version tag push: git tag v0.2.0 && git push --tags
 on:
   push:
     tags:
@@ -37,100 +36,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # TODO: uncomment once Dockerfile.server produces a working binary
-      # - name: Build and push opensnow-server
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: .
-      #     file: Dockerfile.server
-      #     push: true
-      #     tags: |
-      #       ghcr.io/opensnow/opensnow-server:${{ steps.version.outputs.tag }}
-      #       ghcr.io/opensnow/opensnow-server:latest
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
-
-      # TODO: uncomment once Dockerfile.worker produces a working binary
-      # - name: Build and push opensnow-worker
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: .
-      #     file: Dockerfile.worker
-      #     push: true
-      #     tags: |
-      #       ghcr.io/opensnow/opensnow-worker:${{ steps.version.outputs.tag }}
-      #       ghcr.io/opensnow/opensnow-worker:latest
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
-
-      - name: Placeholder — images not yet built
-        run: echo "Image build skipped — binaries not yet implemented. Remove this step once Dockerfiles are enabled."
-
-  # ---------------------------------------------------------------------------
-  # Deploy documentation site and Helm chart to Netlify
-  # The chart is served at https://charts.opensnow.io (via Netlify redirect)
-  # ---------------------------------------------------------------------------
-  deploy-netlify:
-    name: Deploy to Netlify
-    runs-on: ubuntu-latest
-    needs: build-and-push-images
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Extract version tag (strip leading 'v')
-        id: version
-        run: echo "chart_version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Build and push opensnow-server
+        uses: docker/build-push-action@v5
         with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: site/package-lock.json
+          context: .
+          file: Dockerfile.server
+          push: true
+          tags: |
+            ghcr.io/opensnow/opensnow-server:${{ steps.version.outputs.tag }}
+            ghcr.io/opensnow/opensnow-server:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
+      - name: Build and push opensnow-worker
+        uses: docker/build-push-action@v5
         with:
-          version: "latest"
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: site
-
-      - name: Build site
-        run: npm run build
-        working-directory: site
-
-      - name: Package Helm chart
-        run: |
-          helm package deploy/helm --version ${{ steps.version.outputs.chart_version }} --destination site/dist/charts/
-          mkdir -p site/dist/charts/opensnow
-          tar -xzf site/dist/charts/opensnow-${{ steps.version.outputs.chart_version }}.tgz -C site/dist/charts/opensnow --strip-components=1
-          helm repo index site/dist/charts --url https://charts.opensnow.io/charts
-        env:
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-
-      - name: Update Chart.yaml version
-        run: |
-          sed -i "s/^version:.*/version: ${{ steps.version.outputs.chart_version }}/" deploy/helm/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${GITHUB_REF_NAME}\"/" deploy/helm/Chart.yaml
-
-      - name: Deploy to Netlify
-        uses: nwtgck/actions-netlify@v3.0
-        with:
-          publish-dir: site/dist
-          production-branch: main
-          production-deploy: true
-          deploy-message: "Deploy from GitHub Actions - ${{ github.ref_name }}"
-          enable-pull-request-comment: true
-          enable-commit-comment: true
-          overwrites-pull-request-comment: true
-        env:
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        timeout: 300000
+          context: .
+          file: Dockerfile.worker
+          push: true
+          tags: |
+            ghcr.io/opensnow/opensnow-worker:${{ steps.version.outputs.tag }}
+            ghcr.io/opensnow/opensnow-worker:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ---------------------------------------------------------------------------
   # Build and upload CLI binaries for macOS, Linux, and Windows
@@ -146,8 +74,6 @@ jobs:
           - x86_64-unknown-linux-gnu
           - x86_64-apple-darwin
           - aarch64-apple-darwin
-          # TODO: add Windows target once cross-compilation is set up
-          # - x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
 
@@ -161,20 +87,15 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      # TODO: uncomment once opensnow-cli compiles
-      # - name: Build CLI binary
-      #   run: cargo build --release --bin opensnow --target ${{ matrix.target }}
+      - name: Build CLI binary
+        run: cargo build --release --bin opensnow --target ${{ matrix.target }}
 
-      # TODO: uncomment once binary exists
-      # - name: Upload binary to GitHub Release
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     files: target/${{ matrix.target }}/release/opensnow
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Placeholder — CLI build not yet implemented
-        run: echo "CLI binary build skipped — implement opensnow-cli then enable this step."
+      - name: Upload binary to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: target/${{ matrix.target }}/release/opensnow
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
   # Create the GitHub Release with release notes
@@ -182,21 +103,14 @@ jobs:
   create-github-release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [deploy-netlify, release-cli]
+    needs: [build-and-push-images, release-cli]
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-
-      # TODO: uncomment once there is meaningful content to release
-      # - name: Create Release
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     generate_release_notes: true
-      #     draft: false
-      #     prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Placeholder — release creation not yet enabled
-        run: echo "GitHub Release creation skipped — enable once artifacts are being built."
+      - uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

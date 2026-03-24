@@ -32,7 +32,7 @@
 //!
 //! ## Session context
 //!
-//! Each connection carries a `SessionContext` containing:
+//! Each connection carries a [`SessionContext`] containing:
 //! - Active role
 //! - Active warehouse
 //! - Active database and schema
@@ -40,10 +40,22 @@
 //!
 //! ## Planned modules
 //!
-//! - `session`   — Session context, parameter store, connection lifecycle
 //! - `jwt`       — JWT issuance and verification (key-pair auth)
-//! - `password`  — Password hashing and verification
 //! - `rbac`      — Role graph, privilege resolution, grant/revoke
 //! - `policy`    — Network policies, IP allowlisting
 
-// TODO: implement
+pub mod password;
+pub mod session;
+pub mod jwt;
+pub mod oidc;
+
+pub use password::{hash_password, verify_password, PasswordError};
+pub use jwt::{
+    issue_session_token, verify_session_token, verify_session_token_with_secrets, SessionClaims,
+    SessionTokenError,
+};
+pub use session::SessionContext;
+pub use oidc::{
+    fetch_jwks_json, verify_oidc_access_token, verify_oidc_access_token_with_jwks_json, OidcClaims,
+    OidcError,
+};
