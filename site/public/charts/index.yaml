@@ -1,0 +1,29 @@
+apiVersion: v1
+entries:
+  opensnow:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2026-03-23T22:54:10.795663-07:00"
+    description: 'OpenSnow — self-hosted, open-source data warehouse compatible with
+      the Snowflake SQL dialect and official Snowflake drivers. Deploy on your own
+      AWS infrastructure and run the same SnowSQL queries you write today. '
+    digest: f42d2bb1b01126349cbdff4c6a4af6ec0792c579c7f61507dcefbb9ad5f64828
+    home: https://github.com/opensnow/opensnow
+    keywords:
+    - data-warehouse
+    - snowflake
+    - analytics
+    - sql
+    - iceberg
+    - datafusion
+    maintainers:
+    - name: OpenSnow Contributors
+      url: https://github.com/opensnow/opensnow
+    name: opensnow
+    sources:
+    - https://github.com/opensnow/opensnow
+    type: application
+    urls:
+    - https://charts.opensnow.io/charts/opensnow-0.1.0.tgz
+    version: 0.1.0
+generated: "2026-03-23T22:54:10.795165-07:00"
