@@ -34,3 +34,5 @@ base64 = "0.22"
 [dev-dependencies]
 tower = "0.5"
 http = "1"
+tokio-postgres = "0.7.16"
+postgres-types = "0.2"

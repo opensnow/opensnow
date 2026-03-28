@@ -37,7 +37,7 @@ async fn rejects_invalid_sql_with_400() {
         .uri("/api/v2/statements")
         .header("authorization", auth)
         .header("content-type", "application/json")
-        .body(Body::from(r#"{"statement":"select 1"}"#))
+        .body(Body::from(r#"{"statement":";;;"}"#))
         .expect("request");
     let resp = app.oneshot(req).await.expect("response");
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -204,10 +204,10 @@ async fn session_login_returns_token_and_bearer_can_query() {
         .uri("/api/v2/statements")
         .header("authorization", auth)
         .header("content-type", "application/json")
-        .body(Body::from(r#"{"statement":"select 1"}"#))
+        .body(Body::from(r#"{"statement":"SELECT 1 AS n"}"#))
         .expect("statement request");
     let stmt_resp = app.oneshot(stmt_req).await.expect("statement response");
-    assert_eq!(stmt_resp.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(stmt_resp.status(), StatusCode::ACCEPTED);
 }
 
 #[tokio::test]

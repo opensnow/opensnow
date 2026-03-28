@@ -47,17 +47,6 @@
 //! - `cache`      — Global result cache (in-memory + optional Redis backend)
 //! - `scheduler`  — Query queue per warehouse, concurrency slot management
 
-use opensnow_common::{OpenSnowError, Result};
-use serde_json::Value;
+mod engine;
 
-/// Execute a constrained SQL statement for the initial storage vertical slice.
-///
-/// Current supported SQL:
-/// `SELECT * FROM parquet_scan('<path>') LIMIT <n>`
-pub async fn execute_sql(sql: &str) -> Result<Vec<Value>> {
-    let parsed = opensnow_sql::parse_select_parquet_scan(sql)?;
-    opensnow_storage::read_local_parquet_rows(parsed.path, parsed.limit).map_err(|e| match e {
-        OpenSnowError::Storage(_) | OpenSnowError::Io(_) => e,
-        other => OpenSnowError::Execution(other.to_string()),
-    })
-}
+pub use engine::execute_sql;

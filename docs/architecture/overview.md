@@ -193,11 +193,11 @@ extensions most commonly used in production workloads:
 | QUALIFY clause | `SELECT ... QUALIFY ROW_NUMBER() OVER (...) = 1` | Planned (Phase 2) |
 | UNDROP | `UNDROP TABLE / SCHEMA / DATABASE` | Planned (Phase 3) |
 | Virtual warehouses | `CREATE WAREHOUSE`, `ALTER WAREHOUSE SUSPEND/RESUME` | Planned (Phase 2) |
-| COPY INTO | `COPY INTO table FROM @stage` | Planned (Phase 1) |
+| COPY INTO | `COPY INTO table FROM @stage` | Partial (Phase 1: local `FILES = (...)` only) |
 | Streams & Tasks | `CREATE STREAM`, `CREATE TASK` | Planned (Phase 3) |
 
-A full SQL compatibility matrix is maintained in `docs/sql-compatibility.md` (to be
-created during Phase 1 implementation).
+A SQL compatibility matrix for the current baseline is maintained in
+`docs/sql-compatibility.md`.
 
 ---
 
@@ -264,6 +264,7 @@ of the graph. This prevents circular dependencies and keeps shared types easy to
 ## Further Reading
 
 - [`docs/adr/`](../adr/) — Architecture Decision Records for every major technology choice
+- [`docs/architecture/roadmap.md`](./roadmap.md) — current build status and remaining implementation roadmap
 - [`deploy/helm/values.yaml`](../../deploy/helm/values.yaml) — all configuration options
 - [`deploy/terraform/aws/`](../../deploy/terraform/aws/) — AWS infrastructure provisioning
 - [`docker-compose.yml`](../../docker-compose.yml) — local development stack

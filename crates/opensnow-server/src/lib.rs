@@ -22,6 +22,8 @@ use std::{
 };
 use tokio::{net::TcpListener, sync::RwLock};
 
+mod pgwire;
+
 #[derive(Clone)]
 struct AppState {
     statements: Arc<RwLock<HashMap<String, StatementEntry>>>,
@@ -172,10 +174,26 @@ pub fn app() -> Router {
 
 pub async fn run(config: ServerConfig) -> anyhow::Result<()> {
     let app_state = AppState::from_config(&config)?;
-    let app = build_app(app_state);
-    let listener = TcpListener::bind(("0.0.0.0", config.http_port)).await?;
+    let http_app = build_app(app_state);
+    let http_listener = TcpListener::bind(("0.0.0.0", config.http_port)).await?;
     tracing::info!(port = config.http_port, "HTTP server listening");
-    axum::serve(listener, app).await?;
+
+    let pg_auth_user = config.bootstrap_user.clone();
+    let pg_auth_password = config.bootstrap_password.clone();
+    let pg_port = config.pg_port;
+    let pg_task = tokio::spawn(async move {
+        pgwire::run_pgwire_listener(("0.0.0.0", pg_port), &pg_auth_user, &pg_auth_password).await
+    });
+
+    let http_task = tokio::spawn(async move {
+        axum::serve(http_listener, http_app)
+            .await
+            .map_err(anyhow::Error::from)
+    });
+
+    let (pg_res, http_res) = tokio::try_join!(pg_task, http_task)?;
+    pg_res?;
+    http_res?;
     Ok(())
 }
 
@@ -317,7 +335,7 @@ async fn post_statements(
         payload.schema,
         payload.role,
     );
-    if let Err(err) = opensnow_sql::parse_select_parquet_scan(&payload.statement) {
+    if let Err(err) = opensnow_sql::validate_statement(&payload.statement) {
         return (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {

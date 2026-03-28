@@ -42,6 +42,11 @@
 //! - `types`     — VARIANT type definition and Arrow mapping
 
 use opensnow_common::{OpenSnowError, Result};
+use sqlparser::dialect::SnowflakeDialect;
+use sqlparser::parser::Parser;
+
+/// Re-export for crates that branch on parsed [`Statement`] kinds (e.g. `opensnow-compute`).
+pub use sqlparser::ast::{CopyIntoSnowflakeKind, ObjectType, Statement};
 
 /// Constrained statement shape for the first storage vertical slice.
 ///
@@ -103,6 +108,35 @@ pub fn parse_select_parquet_scan(sql: &str) -> Result<SelectParquetScan> {
     Ok(SelectParquetScan { path, limit })
 }
 
+/// Parse exactly one statement using the Snowflake SQL dialect (sqlparser).
+pub fn parse_one_statement(sql: &str) -> Result<Statement> {
+    let sql = sql.trim().trim_end_matches(';').trim();
+    let dialect = SnowflakeDialect {};
+    let mut stmts = Parser::parse_sql(&dialect, sql)
+        .map_err(|e| OpenSnowError::InvalidStatement(e.to_string()))?;
+    if stmts.is_empty() {
+        return Err(OpenSnowError::InvalidStatement("empty statement".into()));
+    }
+    if stmts.len() > 1 {
+        return Err(OpenSnowError::InvalidStatement(
+            "exactly one SQL statement is supported".into(),
+        ));
+    }
+    Ok(stmts.remove(0))
+}
+
+/// Accept legacy `parquet_scan` queries or any statement valid for [`parse_one_statement`].
+pub fn validate_statement(sql: &str) -> Result<()> {
+    let sql = sql.trim();
+    if sql.is_empty() {
+        return Err(OpenSnowError::InvalidStatement("empty statement".into()));
+    }
+    if parse_select_parquet_scan(sql).is_ok() {
+        return Ok(());
+    }
+    parse_one_statement(sql).map(|_| ())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,5 +154,17 @@ mod tests {
     fn rejects_invalid_shape() {
         let err = parse_select_parquet_scan("SELECT 1").unwrap_err();
         assert!(matches!(err, OpenSnowError::InvalidStatement(_)));
+    }
+
+    #[test]
+    fn validate_accepts_select_and_ddl() {
+        validate_statement("SELECT 1").unwrap();
+        validate_statement("CREATE DATABASE db1").unwrap();
+        validate_statement("CREATE SCHEMA s1").unwrap();
+    }
+
+    #[test]
+    fn validate_rejects_garbage() {
+        assert!(validate_statement(";;;").is_err());
     }
 }
